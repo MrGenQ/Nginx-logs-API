@@ -10,8 +10,13 @@ const ApiUser = require('../models/ApiUsers'); // Correctly import the User mode
 router.post('/register', async (req, res) => {
     const { client_credentials, client_secret, email } = req.body;
     
-    if (!client_credentials || !client_secret || !email) {
-        return res.status(400).send('client_credentials, client_secret, and email are required.');
+    if (!client_credentials || !client_secret) {
+        return res.status(400).json(
+            { 
+                success: false,
+                message: 'client_credentials and client_secret are required.' 
+            }
+        );
     }
 
     try {
@@ -31,15 +36,22 @@ router.post('/register', async (req, res) => {
 
         try {
             // Send the email to the new user
-            await mailer.sendEmail(email, emailSubject, emailBody);
-            res.status(201).send('User registered successfully and email sent.');
+            if (process.env.EMAIL_SERVICE_ENABLED === 1) {
+                await mailer.sendEmail(email, emailSubject, emailBody);
+                res.status(201).json({ success: true, message: 'User registered successfully and email sent.' });
+            } else {
+                res.status(201).json({ success: true, message: 'User registered successfully.' });
+            }
+            
         } catch (emailError) {
             console.error('Error sending email:', emailError);
-            res.status(500).send('User registered but email could not be sent.');
+            res.status(500).json({ success: false, message: 'User registered but email could not be sent.' });
         }
     } catch (err) {
+        const errorMessages = err.errors.map((error) => error.message);
+
         console.error('Error registering user:', err);
-        res.status(500).send('Error registering user.');
+        res.status(500).json({ success: false, message: 'Error registering user.', errors: errorMessages});
     }
 });
 
@@ -48,7 +60,12 @@ router.post('/token', async (req, res) => {
     const { client_credentials, client_secret } = req.body;
 
     if (!client_credentials || !client_secret) {
-        return res.status(400).send('client_credentials and client_secret are required.');
+        return res.status(400).json(
+            {
+                success: false,
+                message: 'client_credentials and client_secret are required.'
+            }
+        );
     }
 
     try {
@@ -58,13 +75,13 @@ router.post('/token', async (req, res) => {
         });
 
         if (!user) {
-            return res.status(404).send('User not found.');
+            return res.status(404).json({ success: false, message: 'User not found.' });
         }
 
         // Compare the client_secret with the hashed password stored in the database
         const isMatch = await bcrypt.compare(client_secret, user.client_secret);
         if (!isMatch) {
-            return res.status(401).send('Invalid credentials.');
+            return res.status(401).json({ success: false, message: 'Invalid credentials.' });
         }
 
         // Generate a JWT token
@@ -77,11 +94,10 @@ router.post('/token', async (req, res) => {
         });
 
         // Send response with the token
-        res.json({ 'success': true, token });
-
+        res.json({ success: true, token });
     } catch (err) {
         console.error(err);
-        res.status(500).send('Server error.');
+        res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
 
@@ -90,7 +106,7 @@ router.post('/change-client_secret', authenticateToken, async (req, res) => {
     const { oldclient_secret, newclient_secret } = req.body;
 
     if (!oldclient_secret || !newclient_secret) {
-        return res.status(400).json({ 'success': false, message: 'Old client_secret and new client_secret are required.' });
+        return res.status(400).json({ success: false, message: 'Old client_secret and new client_secret are required.' });
     }
 
     try {
@@ -101,13 +117,13 @@ router.post('/change-client_secret', authenticateToken, async (req, res) => {
 
         // Check if the user exists and has a client_secret
         if (!user || !user.client_secret) {
-            return res.status(404).json({ 'success': false, message: 'User not found or client_secret is undefined.' });
+            return res.status(404).json({ success: false, message: 'User not found or client_secret is undefined.' });
         }
 
         // Compare the old client_secret with the stored hashed client_secret
         const isMatch = await bcrypt.compare(oldclient_secret, user.client_secret);
         if (!isMatch) {
-            return res.status(401).json({ 'success': false, message: 'Old client_secret is incorrect.' });
+            return res.status(401).json({ success: false, message: 'Old client_secret is incorrect.' });
         }
 
         // Hash the new client_secret
@@ -116,10 +132,10 @@ router.post('/change-client_secret', authenticateToken, async (req, res) => {
         // Update the client_secret in the database using Sequelize's .update() method
         await user.update({ client_secret: hashedSecret });
 
-        res.status(200).json({ 'success': true, message: 'client_secret updated successfully.' });
+        res.status(200).json({ success: true, message: 'client_secret updated successfully.' });
     } catch (err) {
         console.error('Error during client_secret change:', err);
-        res.status(500).json({ 'success': false, message: 'Internal server error.' });
+        res.status(500).json({ success: false, message: 'Internal server error.' });
     }
 });
 

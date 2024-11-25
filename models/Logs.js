@@ -6,6 +6,6 @@ const Log = db.define('log', {
     ip: { type: DataTypes.STRING, allowNull: false },
     route: { type: DataTypes.STRING, allowNull: false },
     timestamp: { type: DataTypes.DATE, allowNull: false },
-  });
+});
 
 module.exports = Log;

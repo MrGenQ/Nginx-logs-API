@@ -3,92 +3,61 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/authenticate'); // Make sure the path is correct
 const fs = require('fs');
-const readline = require('readline');
 const Log = require('../models/Logs');
 const moment = require('moment');  // Use moment.js for date formatting
-const faker = require('faker');
 const path = require('path');
+const { processLogFile, generateLogLine } = require('../helpers/fileProcessor');
 
 // Multer setup for file uploads
 const upload = multer({ dest: 'files/uploads/' });
-
-// Helper function to parse a single log line and format the timestamp
-function parseLogLine(line) {
-    const regex = /^([\d.]+) - - \[([^\]]+)\] "GET (\S+) HTTP\/1.1" \d+ \d+/;
-    const match = line.match(regex);
-
-    if (match) {
-        // Parse the timestamp from the log line and format it into MySQL-compatible format
-        const timestamp = moment(match[2], 'DD/MMM/YYYY:HH:mm:ss Z').format('YYYY-MM-DD HH:mm:ss');
-
-        return {
-            ip: match[1],
-            timestamp: timestamp,  // Using formatted timestamp
-            route: match[3],
-        };
-    }
-    return null;
+const logDirectory = path.join(__dirname, '../files/logs');
+if (!fs.existsSync(logDirectory)) { // ensure files/uploads directory exists
+    fs.mkdirSync(logDirectory, { recursive: true });
 }
 
-// Function to process a single log file
-async function processLogFile(filePath) {
-    console.log(`Processing file: ${filePath}`);
-    
-    const fileStream = fs.createReadStream(filePath);
-    const rl = readline.createInterface({
-        input: fileStream,
-        crlfDelay: Infinity,
-    });
+// Endpoint to process all files
+router.post('/process-all', async (req, res) => {
+    try {
+        const files = fs.readdirSync(logDirectory);
 
-    const logsBatch = [];
-    const batchSize = 1000; // Adjust this for performance testing
-    let totalProcessed = 0;
-
-    for await (const line of rl) {
-        const log = parseLogLine(line);
-
-        if (log) {
-            logsBatch.push(log);
-
-            // When the batch size is reached, insert into the database
-            if (logsBatch.length >= batchSize) {
-                await Log.bulkCreate(logsBatch); // Bulk insert
-                totalProcessed += logsBatch.length;
-                console.log(`Inserted ${logsBatch.length} logs. Total processed: ${totalProcessed}`);
-                logsBatch.length = 0; // Clear the batch
-            }
+        for (const file of files) {
+            const filePath = path.join(logDirectory, file);
+            console.log(`Processing file: ${filePath}`);
+            await processLogFile(filePath); // Using the helper function
         }
+
+        res.status(200).json({ success: true, message: 'All files processed successfully.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: true, message: 'Error processing files.', error: error.message });
     }
-
-    // Insert any remaining logs in the last batch
-    if (logsBatch.length > 0) {
-        await Log.bulkCreate(logsBatch);
-        totalProcessed += logsBatch.length;
-        console.log(`Inserted final ${logsBatch.length} logs. Total processed: ${totalProcessed}`);
+});
+  
+// Endpoint to process a single file
+router.post('/process-one', authenticateToken, async (req, res) => {
+    const { fileName } = req.body;
+  
+    if (!fileName) {
+        return res.status(400).json({ success: false, message: 'fileName is required.' });
     }
-
-    console.log(`Finished processing file: ${filePath}. Total logs processed: ${totalProcessed}`);
-}
-
-// Helper function to generate a single log line
-function generateLogLine() {
-    const ip = faker.internet.ip();  // Random IP address
-    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -1);  // Current timestamp
-    const route = `/some/route/${faker.datatype.number({min: 1, max: 1000})}`;  // Random route
-    const statusCode = faker.random.arrayElement([200, 301, 404, 502]);  // Random status code
-    const responseTime = faker.datatype.number({ min: 100, max: 5000 });  // Random response time
-    const userAgent = faker.internet.userAgent();  // Random User-Agent string
-    const method = faker.random.arrayElement(['GET', 'POST', 'DELETE', 'PUT']);  // Random status code
-
-    return `${ip} - - [${timestamp}] "${method} ${route} HTTP/1.1" ${statusCode} ${responseTime} "-" "${userAgent}"\n`;
-}
-
+  
+    const filePath = path.join(logDirectory, fileName);
+  
+    try {
+        console.log(`Processing single file: ${filePath}`);
+        await processFile(filePath); // Reuse helper
+        res.status(200).json({ success: true, message: `File ${fileName} processed successfully.` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error processing file.', error: error.message });
+    }
+});
 
 // Endpoint to upload log files
 router.post('/upload', authenticateToken, upload.array('files'), async (req, res) => {
-    const logDir = path.join(__dirname, '../files/uploads');
-    if (!fs.existsSync(logDir)) { // ensure files/uploads directory exists
-        fs.mkdirSync(logDir, { recursive: true });
+    const uploadDir = path.join(__dirname, '../files/uploads');
+    if (!fs.existsSync(uploadDir)) { // ensure files/uploads directory exists
+        fs.mkdirSync(uploadDir, { recursive: true });
     }
 
     try {
@@ -98,21 +67,51 @@ router.post('/upload', authenticateToken, upload.array('files'), async (req, res
             await processLogFile(file.path);
             // fs.unlinkSync(file.path); // Clean up uploaded file
         }
-        res.status(200).send('Logs processed and saved successfully.');
+        res.status(200).json({ success: true, message: 'Logs processed and saved successfully.' });
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error processing log files.');
+        res.status(500).json({ success: false, message: 'Error processing log files.' });
     }
 });
 
-// API endpoint to retrieve logs, sorted by IP and route
+// API endpoint to retrieve logs with pagination and ordering
 router.get('/logs', authenticateToken, async (req, res) => {
     try {
-        const logs = await Log.findAll({ order: [['ip', 'ASC'], ['route', 'ASC']] });
-        res.status(200).json(logs);
+        const { page = 1, limit = 1000, order = 'id ASC' } = req.query; // Default ordering by `id` ascending
+        const offset = (page - 1) * limit;
+
+        // Parse the order parameter
+        const [orderField, orderDirection] = order.split(' ');
+        const allowedFields = ['id', 'ip', 'route', 'timestamp'];
+        const allowedDirections = ['ASC', 'DESC'];
+
+        // Validate the order field and direction
+        if (!allowedFields.includes(orderField) || !allowedDirections.includes(orderDirection?.toUpperCase())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid order parameter. Use a valid field and direction - ASC/DESC.',
+            });
+        }
+
+        // Fetch logs with pagination and dynamic ordering
+        const { count, rows: logs } = await Log.findAndCountAll({
+            order: [[orderField, orderDirection.toUpperCase()]],
+            limit: parseInt(limit, 10),
+            offset: parseInt(offset, 10),
+        });
+
+        res.status(200).json({
+            success: true,
+            data: logs,
+            meta: {
+                totalRecords: count,
+                currentPage: parseInt(page, 10),
+                totalPages: Math.ceil(count / limit),
+            },
+        });
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error retrieving logs.');
+        res.status(500).json({ success: false, message: 'Error retrieving logs.' });
     }
 });
 
@@ -120,11 +119,6 @@ router.get('/logs', authenticateToken, async (req, res) => {
 router.get('/generate-nginx-file', authenticateToken, async (req, res) => {
     const timestamp = moment().format('YYYYMMDD_HHmmss');  // Format: YYYYMMDD_HHmmss
     const logFilePath = path.join(__dirname, `../files/logs/${timestamp}.log`);  // Log file location with timestamp to prevent overlapping files
-
-    const logDir = path.join(__dirname, '../files/logs');
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
 
     // Default number of lines to generate
     let numLines = 1000000;
@@ -134,11 +128,11 @@ router.get('/generate-nginx-file', authenticateToken, async (req, res) => {
         const requestedLines = parseInt(req.query.numLines, 10);
 
         if (isNaN(requestedLines) || requestedLines <= 0) {
-            return res.status(400).send('Invalid number of lines provided. Must be a positive number.');
+            return res.status(400).json({ success: false, message: 'Invalid number of lines provided. Must be a positive number.' });
         }
 
         if (requestedLines > 1000000) {
-            return res.status(400).send('Requested number of lines exceeds the maximum limit of 1,000,000.');
+            return res.status(400).json({ success: false, message: 'Requested number of lines exceeds the maximum limit of 1,000,000.' });
         }
 
         numLines = requestedLines;
@@ -154,7 +148,7 @@ router.get('/generate-nginx-file', authenticateToken, async (req, res) => {
             stream.end();  // Close the stream when done
             console.log(`Generated log file with ${numLines} lines.`);
             
-            res.send('Generated nginx sample file successfully');
+            res.json({ success: true, message: 'Generated nginx sample file successfully' });
         } else {
             const logLine = generateLogLine();
             stream.write(logLine);
@@ -162,6 +156,5 @@ router.get('/generate-nginx-file', authenticateToken, async (req, res) => {
         }
     }, 0);  // Write line by line with no delay
 });
-
 
 module.exports = router;
