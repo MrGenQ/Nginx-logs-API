@@ -22,6 +22,7 @@ This combination of automation, flexibility, and security makes the API a robust
 - Log File Handling
 - Cron Jobs
 - Data Generation
+- Documentation
 
 ## Project Initialization
 - mkdir Nginx-Logs-API
@@ -65,12 +66,17 @@ This combination of automation, flexibility, and security makes the API a robust
 ### Add fake data generation capabilities for testing with Faker.js.
 - npm install @faker-js/faker
 
+## Documentation
+### Used swagger to generate api documentation
+#### documentation url base_url/api/docs
+- npm install swagger-jsdoc swagger-ui-express
+
 # How to get started
 ## Project uses docker engine. run the following
 - docker compose up -d
 ## Thanks to development tool - nodemon to start the server run the following
 - npm run dev
-or regular (note program will not automaticly restart)
+#### or regular (note program will not automaticly restart)
 - node app.js
 ## Environment variables setup
 - create .env file from sample.env file (by just removing the word 'sample') these are the dotenv variables used

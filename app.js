@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const cron = require('node-cron');
 const axios = require('axios'); // For calling API endpoints
 const { initializeCrons } = require('./cronjobManager/crons');
+const { swaggerUi, swaggerDocs } = require('./documentation/swagger');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +28,10 @@ app.use('/nginx', nginxLogs); // Nginx logs methods
 
 // Initialize Cron Jobs
 initializeCrons();
+
+// Serve Swagger UI at /api/docs
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+app.use('/documentation/postman', express.static(path.join(__dirname, 'documentation/postman')));
 
 // Start the server
 app.listen(PORT, () => {

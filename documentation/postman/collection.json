@@ -1,0 +1,245 @@
+{
+	"info": {
+		"_postman_id": "1ff04bd7-4d49-4308-afd0-055a6f05c6a2",
+		"name": "Methods",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "24531814"
+	},
+	"item": [
+		{
+			"name": "Authentification",
+			"item": [
+				{
+					"name": "Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var T = pm.response.json();",
+									"console.log(T);",
+									"pm.environment.set(\"token\", T.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"client_credentials\": \"cronjobManager\",\n    \"client_secret\": \"password\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/token",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"token"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"client_credentials\": \"cronjobManager\",\n    \"client_secret\": \"password\",\n    \"email\": \"test@gmail.com\"\n}\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/register",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change client_secret",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"oldclient_secret\": \"password\",\n    \"newclient_secret\": \"admin\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/change-client_secret",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"change-client_secret"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Nginx logs",
+			"item": [
+				{
+					"name": "Logs",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/nginx/logs?order=ip asc&page=1",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"nginx",
+								"logs"
+							],
+							"query": [
+								{
+									"key": "order",
+									"value": "route DESC",
+									"disabled": true
+								},
+								{
+									"key": "order",
+									"value": "ip asc"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files",
+									"type": "file",
+									"src": "/home/julliet/Downloads/20241125.log"
+								},
+								{
+									"key": "sec",
+									"value": "tt",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{url}}/nginx/upload",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"nginx",
+								"upload"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generate nginx file",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/nginx/generate-nginx-file?numLines=1000",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"nginx",
+								"generate-nginx-file"
+							],
+							"query": [
+								{
+									"key": "numLines",
+									"value": "1000"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

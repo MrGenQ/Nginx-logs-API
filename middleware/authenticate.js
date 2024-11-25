@@ -5,7 +5,7 @@ const authenticateToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(400).send('Bad request. No token provided.');
+        return res.status(400).json({success: false, message: 'Bad request. No token provided.' });
     }
 
     const token = authHeader.split(' ')[1];
@@ -15,7 +15,7 @@ const authenticateToken = (req, res, next) => {
         req.user = decoded; // Attach the decoded payload to the request
         next();
     } catch (err) {
-        res.status(401).send('Invalid or expired token.');
+        res.status(401).json({success: false, message: 'Invalid or expired token.' });
     }
 };
 
